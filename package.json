@@ -1,0 +1,23 @@
+{
+  "name": "clinix-hmis",
+  "version": "1.0.0",
+  "description": "HMIS Multi-Tenant RBAC Authentication System",
+  "private": true,
+  "workspaces": [
+    "apps/backend",
+    "apps/frontend"
+  ],
+  "scripts": {
+    "dev": "turbo run dev",
+    "build": "turbo run build",
+    "lint": "turbo run lint",
+    "test": "turbo run test",
+    "type-check": "turbo run type-check",
+    "db:push": "cd apps/backend && npx prisma db push",
+    "db:migrate": "cd apps/backend && npx prisma migrate dev",
+    "db:generate": "cd apps/backend && npx prisma generate"
+  },
+  "devDependencies": {
+    "turbo": "^2.0.0"
+  }
+}
