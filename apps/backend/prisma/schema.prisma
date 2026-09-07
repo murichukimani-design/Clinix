@@ -1,0 +1,328 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ==================== TENANT MODELS ====================
+
+model Tenant {
+  id                 String   @id @default(cuid())
+  name               String
+  slug               String   @unique
+  email              String   @unique
+  phone              String?
+  address            String?
+  city               String?
+  state              String?
+  country            String?
+  zipCode            String?
+  logo               String?
+  description        String?
+  maxUsers           Int      @default(100)
+  maxBranches        Int      @default(5)
+  subscriptionStatus String   @default("active") // active, inactive, suspended
+  subscriptionTier   String   @default("basic") // basic, professional, enterprise
+  subscriptionEndAt  DateTime?
+  
+  // Relations
+  branches           Branch[]
+  users              User[]
+  roles              Role[]
+  permissions        Permission[]
+  auditLogs          AuditLog[]
+  
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+  
+  @@index([slug])
+  @@index([subscriptionStatus])
+}
+
+model Branch {
+  id                 String   @id @default(cuid())
+  tenantId           String
+  tenant             Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  
+  name               String
+  code               String   @unique
+  type               String   @default("main") // main, satellite, clinic
+  email              String?
+  phone              String?
+  address            String?
+  city               String?
+  state              String?
+  country            String?
+  zipCode            String?
+  latitude           Float?
+  longitude          Float?
+  
+  isActive           Boolean  @default(true)
+  
+  // Relations
+  users              User[]
+  departments        Department[]
+  auditLogs          AuditLog[]
+  
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+  
+  @@unique([tenantId, code])
+  @@index([tenantId])
+  @@index([type])
+}
+
+// ==================== USER MODELS ====================
+
+model User {
+  id                 String   @id @default(cuid())
+  tenantId           String
+  tenant             Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  
+  branchId           String?
+  branch             Branch?  @relation(fields: [branchId], references: [id], onDelete: SetNull)
+  
+  email              String
+  firstName          String
+  lastName           String
+  password           String
+  avatar             String?
+  phone              String?
+  department         String?
+  designation        String?
+  employeeId         String?
+  
+  // Authentication
+  emailVerified      Boolean  @default(false)
+  emailVerificationToken String?
+  emailVerificationExpiry DateTime?
+  
+  passwordResetToken String?
+  passwordResetExpiry DateTime?
+  
+  lastLogin          DateTime?
+  lastLoginIp        String?
+  lastLoginUserAgent String?
+  
+  // Account Status
+  isActive           Boolean  @default(true)
+  isLocked           Boolean  @default(false)
+  lockReason         String?
+  lockExpiresAt      DateTime?
+  loginAttempts      Int      @default(0)
+  
+  // Relations
+  roles              UserRole[]
+  permissions        UserPermission[]
+  sessions           Session[]
+  auditLogs          AuditLog[]
+  notifications      Notification[]
+  
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+  
+  @@unique([tenantId, email])
+  @@index([tenantId])
+  @@index([branchId])
+  @@index([isActive])
+}
+
+model Session {
+  id                 String   @id @default(cuid())
+  userId             String
+  user               User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  token              String   @unique
+  refreshToken       String   @unique
+  ipAddress          String?
+  userAgent          String?
+  
+  isActive           Boolean  @default(true)
+  expiresAt          DateTime
+  
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+  
+  @@index([userId])
+  @@index([token])
+}
+
+// ==================== ROLE & PERMISSION MODELS ====================
+
+model Role {
+  id                 String   @id @default(cuid())
+  tenantId           String?
+  tenant             Tenant?  @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  
+  name               String
+  slug               String
+  description        String?
+  
+  isSystemRole       Boolean  @default(false)
+  isActive           Boolean  @default(true)
+  
+  // Relations
+  users              UserRole[]
+  permissions        RolePermission[]
+  
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+  
+  @@unique([tenantId, slug])
+  @@index([tenantId])
+  @@index([isSystemRole])
+}
+
+model UserRole {
+  id                 String   @id @default(cuid())
+  userId             String
+  user               User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  roleId             String
+  role               Role     @relation(fields: [roleId], references: [id], onDelete: Cascade)
+  
+  assignedAt         DateTime @default(now())
+  assignedBy         String?
+  
+  @@unique([userId, roleId])
+  @@index([userId])
+  @@index([roleId])
+}
+
+model Permission {
+  id                 String   @id @default(cuid())
+  tenantId           String?
+  tenant             Tenant?  @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  
+  name               String
+  slug               String
+  description        String?
+  category           String   // users, roles, permissions, reports, settings, etc.
+  
+  isSystemPermission Boolean  @default(false)
+  isActive           Boolean  @default(true)
+  
+  // Relations
+  roles              RolePermission[]
+  users              UserPermission[]
+  
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+  
+  @@unique([tenantId, slug])
+  @@index([tenantId])
+  @@index([category])
+  @@index([isSystemPermission])
+}
+
+model RolePermission {
+  id                 String   @id @default(cuid())
+  roleId             String
+  role               Role     @relation(fields: [roleId], references: [id], onDelete: Cascade)
+  
+  permissionId       String
+  permission         Permission @relation(fields: [permissionId], references: [id], onDelete: Cascade)
+  
+  @@unique([roleId, permissionId])
+  @@index([roleId])
+  @@index([permissionId])
+}
+
+model UserPermission {
+  id                 String   @id @default(cuid())
+  userId             String
+  user               User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  permissionId       String
+  permission         Permission @relation(fields: [permissionId], references: [id], onDelete: Cascade)
+  
+  grantedAt          DateTime @default(now())
+  grantedBy          String?
+  expiresAt          DateTime?
+  
+  @@unique([userId, permissionId])
+  @@index([userId])
+  @@index([permissionId])
+}
+
+// ==================== DEPARTMENT MODELS ====================
+
+model Department {
+  id                 String   @id @default(cuid())
+  tenantId           String?
+  branchId           String?
+  branch             Branch?  @relation(fields: [branchId], references: [id], onDelete: SetNull)
+  
+  name               String
+  code               String   @unique
+  description        String?
+  
+  isActive           Boolean  @default(true)
+  
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+  
+  @@index([branchId])
+}
+
+// ==================== AUDIT & LOGGING MODELS ====================
+
+model AuditLog {
+  id                 String   @id @default(cuid())
+  tenantId           String
+  tenant             Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  
+  branchId           String?
+  branch             Branch?  @relation(fields: [branchId], references: [id], onDelete: SetNull)
+  
+  userId             String?
+  action             String   // CREATE, READ, UPDATE, DELETE, LOGIN, LOGOUT
+  entity             String   // User, Role, Permission, etc.
+  entityId           String?
+  
+  changes            Json?    // Track what changed
+  status             String   @default("success") // success, failure
+  errorMessage       String?
+  
+  ipAddress          String?
+  userAgent          String?
+  
+  createdAt          DateTime @default(now())
+  
+  @@index([tenantId])
+  @@index([userId])
+  @@index([action])
+  @@index([createdAt])
+}
+
+// ==================== NOTIFICATION MODELS ====================
+
+model Notification {
+  id                 String   @id @default(cuid())
+  userId             String
+  user               User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  type               String   // email, sms, push, in-app
+  title              String
+  message            String
+  data               Json?
+  
+  isRead             Boolean  @default(false)
+  readAt             DateTime?
+  
+  sentAt             DateTime?
+  failureReason      String?
+  
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+  
+  @@index([userId])
+  @@index([type])
+  @@index([isRead])
+}
